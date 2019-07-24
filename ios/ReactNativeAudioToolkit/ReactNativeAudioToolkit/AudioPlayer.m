@@ -55,14 +55,14 @@
 
 - (NSURL *)findUrlForPath:(NSString *)path {
     NSURL *url = nil;
-    
+
     NSArray *pathComponents = [NSArray arrayWithObjects:
                                [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject],
                                path,
                                nil];
-    
+
     NSString *possibleUrl = [NSString pathWithComponents:pathComponents];
-    
+
     if (![[NSFileManager defaultManager] fileExistsAtPath:possibleUrl]) {
         NSString *fileWithoutExtension = [path stringByDeletingPathExtension];
         NSString *extension = [path pathExtension];
@@ -78,12 +78,12 @@
             } else {
                 url = [NSURL URLWithString:path];
             }
-            
+
         }
     } else {
         url = [NSURL fileURLWithPathComponents:pathComponents];
     }
-    
+
     return url;
 }
 
@@ -102,7 +102,7 @@ RCT_EXPORT_METHOD(prepare:(nonnull NSNumber*)playerId
         callback(@[dict]);
         return;
     }
-        
+
     // Try to find the correct file
     NSURL *url = [self findUrlForPath:path];
     if (!url) {
@@ -110,18 +110,19 @@ RCT_EXPORT_METHOD(prepare:(nonnull NSNumber*)playerId
         callback(@[dict]);
         return;
     }
-    
+
     // Load asset from the url
     AVURLAsset *asset = [AVURLAsset assetWithURL: url];
     ReactPlayerItem *item = (ReactPlayerItem *)[ReactPlayerItem playerItemWithAsset: asset];
     item.reactPlayerId = playerId;
-    
+    item.audioTimePitchAlgorithm = AVAudioTimePitchAlgorithmTimeDomain;
+
     // Add notification to know when file has stopped playing
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(itemDidFinishPlaying:)
                                                  name:AVPlayerItemDidPlayToEndTimeNotification
                                                object:item];
-    
+
     // Set audio session
     NSError *error = nil;
     [[AVAudioSession sharedInstance] setCategory: AVAudioSessionCategoryPlayback error: &error];
@@ -131,11 +132,11 @@ RCT_EXPORT_METHOD(prepare:(nonnull NSNumber*)playerId
         callback(@[dict]);
         return;
     }
-    
+
     // Initialize player
     ReactPlayer* player = [[ReactPlayer alloc]
                         initWithPlayerItem:item];
-    
+
     // If successful, check options and add to player pool
     if (player) {
         NSNumber *autoDestroy = [options objectForKey:@"autoDestroy"];
@@ -151,7 +152,7 @@ RCT_EXPORT_METHOD(prepare:(nonnull NSNumber*)playerId
         callback(@[dict]);
         return;
     }
-    
+
     // Prepare the player
     // Wait until player is ready or has failed
     while (player.status == AVPlayerStatusUnknown) {
@@ -183,7 +184,7 @@ RCT_EXPORT_METHOD(prepare:(nonnull NSNumber*)playerId
     while (player.currentItem.loadedTimeRanges.firstObject == nil){
         [NSThread sleepForTimeInterval:0.01f];
     }
-    
+
     //wait until 10 seconds are buffered then play
     float version = [[[UIDevice currentDevice] systemVersion] floatValue];
     if (version >= 10.0) {
@@ -201,7 +202,7 @@ RCT_EXPORT_METHOD(prepare:(nonnull NSNumber*)playerId
         loadedDurationSeconds = CMTimeGetSeconds(timeRange.duration);
         [NSThread sleepForTimeInterval:0.01f];
     }
-    
+
     // Callback when ready / failed
     if (player.currentItem.status == AVPlayerStatusReadyToPlay) {
         player.automaticallyWaitsToMinimizeStalling = false;
@@ -209,11 +210,11 @@ RCT_EXPORT_METHOD(prepare:(nonnull NSNumber*)playerId
     } else {
         NSDictionary* dict = [Helpers errObjWithCode:@"preparefail"
                                          withMessage:[NSString stringWithFormat:@"Preparing player failed"]];
-        
+
         if (player.autoDestroy) {
             [self destroyPlayerWithId:playerId];
         }
-        
+
         callback(@[dict]);
     }
 }
@@ -225,16 +226,16 @@ RCT_EXPORT_METHOD(destroy:(nonnull NSNumber*)playerId withCallback:(RCTResponseS
 
 RCT_EXPORT_METHOD(seek:(nonnull NSNumber*)playerId withPos:(nonnull NSNumber*)position withCallback:(RCTResponseSenderBlock)callback) {
     ReactPlayer* player = (ReactPlayer *)[self playerForKey:playerId];
-    
+
     if (!player) {
         NSDictionary* dict = [Helpers errObjWithCode:@"notfound"
                                          withMessage:[NSString stringWithFormat:@"playerId %@ not found.", playerId]];
         callback(@[dict]);
         return;
     }
-    
+
     [player cancelPendingPrerolls];
-    
+
     if (position >= 0) {
         NSLog(@"%@", position);
         if (position == 0) {
@@ -311,35 +312,35 @@ RCT_EXPORT_METHOD(set:(nonnull NSNumber*)playerId withOpts:(NSDictionary*)option
 
 RCT_EXPORT_METHOD(stop:(nonnull NSNumber*)playerId withCallback:(RCTResponseSenderBlock)callback) {
     ReactPlayer* player = (ReactPlayer *)[self playerForKey:playerId];
-    
+
     if (!player) {
         NSDictionary* dict = [Helpers errObjWithCode:@"notfound"
                                          withMessage:[NSString stringWithFormat:@"playerId %@ not found.", playerId]];
         callback(@[dict]);
         return;
     }
-    
+
     [player pause];
     if (player.autoDestroy) {
         [self destroyPlayerWithId:playerId];
     } else {
         [player.currentItem seekToTime:CMTimeMakeWithSeconds(0.0, 60000)];
     }
-    
+
     callback(@[[NSNull null], @{@"duration": @(CMTimeGetSeconds(player.currentItem.asset.duration) * 1000),
                                 @"position": @(CMTimeGetSeconds(player.currentTime) * 1000)}]);
 }
 
 RCT_EXPORT_METHOD(pause:(nonnull NSNumber*)playerId withCallback:(RCTResponseSenderBlock)callback) {
     ReactPlayer* player = (ReactPlayer *)[self playerForKey:playerId];
-    
+
     if (!player) {
         NSDictionary* dict = [Helpers errObjWithCode:@"notfound"
                                          withMessage:[NSString stringWithFormat:@"playerId %@ not found.", playerId]];
         callback(@[dict]);
         return;
     }
-    
+
     [player pause];
 
     callback(@[[NSNull null], @{@"duration": @(CMTimeGetSeconds(player.currentItem.asset.duration) * 1000),
